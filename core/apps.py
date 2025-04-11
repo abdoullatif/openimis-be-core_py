@@ -135,6 +135,9 @@ class CoreConfig(AppConfig):
         this.currency = str(cfg["currency"])
 
     def _configure_auto_provisioning(self, cfg):
+        if settings.AUTO_PROVISIONING_USER_GROUP:
+            logger.info('env AUTO_PROVISIONING_USER set to False: no user auto provisioning possible!')
+            return
         if bool(os.environ.get('NO_DATABASE', False)):
             logger.info('env NO_DATABASE set to True: no user auto provisioning possible!')
             return

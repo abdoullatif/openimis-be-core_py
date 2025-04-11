@@ -36,7 +36,7 @@ from core.services import (
     wait_for_mutation
 )
 from core.tasks import openimis_mutation_async
-from core import filter_validity
+from core import filter_validity, prefix_filterset
 from core.data_masking import anonymize_gql
 from django import dispatch
 from django.conf import settings
@@ -66,12 +66,12 @@ from core.gql_queries import RoleGQLType, RoleRightGQLType, UserGQLType, Interac
     ModulePermissionGQLType, CustomFilterOptionGQLType
 from core.utils import flatten_dict, ExtendedConnection
 from core.models import ModuleConfiguration, FieldControl, MutationLog, Language, RoleMutation, UserMutation, User, \
-    InteractiveUser, Role, RoleRight
+    InteractiveUser, Role, RoleRight, ClaimAdmin
 from core.services.roleServices import check_role_unique_name
 from core.services.userServices import check_user_unique_email
 from core.validation.obligatoryFieldValidation import validate_payload_for_obligatory_fields
 from core.serializers import InteractiveUserSerializer
-
+from location.gql_queries import HealthFacilityGQLType
 MAX_SMALLINT = 32767
 MIN_SMALLINT = -32768
 WEBAPP_EXPECTED_REQUESTED_WITH = 'webapp'
@@ -231,7 +231,6 @@ class OpenIMISMutation(graphene.relay.ClientIDMutation):
                                 coerced_list.append(inner_type.parse_value(item))
                             else:
                                 coerced_list.append(item)
-                            coerced_list.append(inner_type.parse_value(item))
                         elif inner_type.__class__ == graphene.utils.subclass_with_meta.SubclassWithMeta_Meta:
                             coerced_list.append(cls.coerce_mutation_data(item, input_class=inner_type))
                         else:
@@ -528,11 +527,11 @@ class OrderedDjangoFilterConnectionField(DjangoFilterConnectionField):
             raise PermissionDenied(_("unauthorized"))
 
         user_agent = request.headers.get("User-Agent", "")
-        # if not any(bypass in user_agent for bypass in getattr(settings, "USER_AGENT_CSRF_BYPASS", [])):
-        #     csrf_middleware = CsrfViewMiddleware(lambda req: None)
-        #     reason = csrf_middleware.process_view(request, None, (), {})
-        #     if reason:
-        #         raise PermissionDenied("CSRF token missing or incorrect.")
+        if not any(bypass in user_agent for bypass in getattr(settings, "USER_AGENT_CSRF_BYPASS", [])):
+            csrf_middleware = CsrfViewMiddleware(lambda req: None)
+            reason = csrf_middleware.process_view(request, None, (), {})
+            if reason:
+                raise PermissionDenied("CSRF token missing or incorrect.")
 
         qs = super(DjangoFilterConnectionField, cls).resolve_queryset(
             connection, iterable, info, args
@@ -596,6 +595,28 @@ UserTypeEnum = graphene.Enum("UserTypes", [
     (UT_TECHNICAL, UT_TECHNICAL),
     (UT_CLAIM_ADMIN, UT_CLAIM_ADMIN)
 ])
+
+class ClaimAdminGQLType(DjangoObjectType):
+    """
+    Details about a Claim Administrator
+    """
+    
+    class Meta:
+        model = ClaimAdmin
+        interfaces = (graphene.relay.Node,)
+        filter_fields = {
+            "uuid": ["exact"],
+            "code": ["exact", "icontains"],
+            "last_name": ["exact", "icontains"],
+            "other_names": ["exact", "icontains"],
+            **prefix_filterset("health_facility__", HealthFacilityGQLType._meta.filter_fields),
+        }
+        connection_class = ExtendedConnection
+
+    @classmethod
+    def get_queryset(cls, queryset, info):
+        queryset = queryset.filter(*filter_validity())
+        return queryset
 
 
 class Query(graphene.ObjectType):
@@ -665,7 +686,12 @@ class Query(graphene.ObjectType):
         parent_location=graphene.String(),
         parent_location_level=graphene.Int()
     )
-
+    claim_admins = DjangoFilterConnectionField(
+        ClaimAdminGQLType,
+        search=graphene.String(),
+        region_uuid=graphene.String(),
+        district_uuid=graphene.String()
+    )
     user = graphene.Field(UserGQLType)
 
     enrolment_officers = OrderedDjangoFilterConnectionField(
@@ -727,6 +753,41 @@ class Query(graphene.ObjectType):
         graphene.JSONString,
         description="Returns the password policy configuration."
     )
+    def resolve_claim_admins(
+            self,
+            info,
+            search=None,
+            **kwargs
+    ):
+        if not info.context.user.has_perms(
+                ClaimConfig.gql_query_claim_admins_perms
+        ):
+            raise PermissionDenied(_("unauthorized"))
+
+        hf_filters = [*filter_validity(**kwargs)]
+        district_uuid = kwargs.get('district_uuid', None)
+        region_uuid = kwargs.get('region_uuid', None)
+        if district_uuid is not None:
+            hf_filters += [Q(location__uuid=district_uuid)]
+        elif region_uuid is not None:
+            hf_filters += [Q(location__parent__uuid=region_uuid)]
+        if settings.ROW_SECURITY:
+            q = LocationManager().build_user_location_filter_query( info.context.user._u, prefix='location', loc_types=['D'])
+            if q:
+                hf_filters += [q]
+
+        user_health_facility = HealthFacility.objects.filter(*hf_filters)
+
+        filters = [*filter_validity(**kwargs)]
+        if user_health_facility:
+            filters += [Q(health_facility__in=user_health_facility)]
+
+        if search:
+            filters += [Q(code__icontains=search) |
+                        Q(last_name__icontains=search) |
+                        Q(other_names__icontains=search)]
+
+        return ClaimAdmin.objects.filter(*filters)
 
     def resolve_username_length(self, info, **kwargs):
         if not info.context.user.has_perms(CoreConfig.gql_query_users_perms):
@@ -1425,6 +1486,7 @@ class UserBase:
     village_ids = graphene.List(graphene.Int, required=False)
 
     user_types = graphene.List(UserTypeEnum, required=True)
+
 
 
 class CreateUserMutation(OpenIMISMutation):

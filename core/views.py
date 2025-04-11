@@ -20,7 +20,6 @@ def check_user_rights(rights):
             return super().has_permission(request, view) and request.user.has_perms(rights)
 
     return UserWithRights
-    
 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
