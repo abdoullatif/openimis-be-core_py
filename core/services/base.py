@@ -50,6 +50,7 @@ class BaseService(ABC):
     def delete(self, obj_data):
         try:
             with transaction.atomic():
+                obj_data.pop('user')
                 self.validation_class.validate_delete(self.user, **obj_data)
                 obj_ = self.OBJECT_TYPE.objects.filter(id=obj_data['id']).first()
                 return self.delete_instance(obj_)
