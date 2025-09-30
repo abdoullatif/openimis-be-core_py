@@ -1149,7 +1149,9 @@ class Query(graphene.ObjectType):
                 CustomFilterOptionGQLType(
                     field=custom_filter.field,
                     filter=custom_filter.filter,
-                    type=custom_filter.type
+                    type=custom_filter.type,
+                    referential=custom_filter.referential,
+                    typeLocation=custom_filter.typeLocation
                 )
             )
         return possible_filters

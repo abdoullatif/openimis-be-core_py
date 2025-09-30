@@ -200,6 +200,8 @@ class CustomFilterOptionGQLType(graphene.ObjectType):
     field = graphene.String()
     filter = graphene.List(graphene.String)
     type = graphene.String()
+    referential = graphene.String()
+    typeLocation = graphene.String()
 
 
 class CustomFilterGQLType(graphene.ObjectType):
