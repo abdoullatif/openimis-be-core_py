@@ -143,6 +143,9 @@ class Role(VersionedModel):
             pass
         return queryset
 
+    def __str__(self):
+        return self.name
+
     class Meta:
         managed = True
         db_table = 'tblRole'
@@ -371,6 +374,9 @@ class InteractiveUser(VersionedModel):
         if settings.ROW_SECURITY and user.is_anonymous:
             return queryset.filter(id=-1)
         return queryset
+
+    def get_full_name(self):
+        return self.last_name + " " + self.other_names
 
     class Meta:
         managed = True
