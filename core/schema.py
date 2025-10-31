@@ -4,6 +4,8 @@ import logging
 import re
 import sys
 import uuid
+import base64
+import io
 
 import graphene
 from django.http import JsonResponse
@@ -80,6 +82,8 @@ core = sys.modules["core"]
 
 logger = logging.getLogger(__name__)
 
+
+from core.user_import_service import UserImportService
 
 class SmallInt(graphene.Int):
     """
@@ -600,7 +604,7 @@ class ClaimAdminGQLType(DjangoObjectType):
     """
     Details about a Claim Administrator
     """
-    
+
     class Meta:
         model = ClaimAdmin
         interfaces = (graphene.relay.Node,)
@@ -1028,7 +1032,7 @@ class Query(graphene.ObjectType):
             filters.append(Q(name__icontains=text_search))
 
         client_mutation_id = kwargs.get("client_mutation_id", None)
-        
+
         if client_mutation_id:
             wait_for_mutation(client_mutation_id)
             filters.append(Q(mutations__mutation__client_mutation_id=client_mutation_id))
@@ -1630,7 +1634,7 @@ def update_or_create_user(data, user):
     user_uuid = data.pop('uuid', None)
     incoming_email = data.get('email')
     if user_uuid:
-        
+
         if uuid.UUID(str(user_uuid)) == uuid.UUID(str(user.id)) and user.is_imis_admin and imis_administrator_system not in data.get("roles", []):
             raise ValidationError("Administrator cannot deprovision himself.")
         current_user = InteractiveUser.objects.filter(user__id=user_uuid).first()
@@ -1658,7 +1662,7 @@ def update_or_create_user(data, user):
         data.pop('client_mutation_id')
     if "client_mutation_label" in data:
         data.pop('client_mutation_label')
-    
+
 
 
     if UT_INTERACTIVE in data["user_types"]:
@@ -1870,6 +1874,38 @@ class GetCsrfTokenMutation(graphene.Mutation):
 
         return GetCsrfTokenMutation(csrf_token=csrf_token)
 
+class ImportUsers(OpenIMISMutation):
+    """
+    Mutation GraphQL permettant d'importer un fichier CSV d'utilisateurs.
+    """
+
+    class Input:
+        file_content = graphene.String(required=True)
+        delimiter = graphene.String(required=False, default_value=",")
+        dry_run = graphene.Boolean(required=False, default_value=False)
+
+    created = graphene.Int()
+    updated = graphene.Int()
+    errors = graphene.List(graphene.String)
+
+    @classmethod
+    def mutate(cls, root, info, **input):
+        try:
+            file_content = input.get("file_content")
+            delimiter = input.get("delimiter", ",")
+            dry_run = input.get("dry_run", False)
+
+            file_bytes = io.BytesIO(base64.b64decode(file_content))
+            report = UserImportService.import_users(file=file_bytes, delimiter=delimiter, dry_run=dry_run)
+
+            return ImportUsers(
+                created=report["created"],
+                updated=report["updated"],
+                errors=report["errors"],
+            )
+        except Exception as e:
+            return ImportUsers(created=0, updated=0, errors=[str(e)])
+
 
 class Mutation(graphene.ObjectType):
     create_role = CreateRoleMutation.Field()
@@ -1894,6 +1930,7 @@ class Mutation(graphene.ObjectType):
     delete_token_cookie = graphql_jwt.DeleteJSONWebTokenCookie.Field()
     delete_refresh_token_cookie = graphql_jwt.DeleteRefreshTokenCookie.Field()
     get_csrf_token = GetCsrfTokenMutation.Field()
+    import_users = ImportUsers.Field()
 
 
 def on_role_mutation(sender, **kwargs):

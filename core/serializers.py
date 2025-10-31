@@ -24,6 +24,16 @@ class CachedModelSerializer(serializers.ModelSerializer):
 class InteractiveUserSerializer(serializers.ModelSerializer):
     language = serializers.PrimaryKeyRelatedField(many=False, read_only=True)
     has_password = serializers.SerializerMethodField()
+    roles = serializers.SerializerMethodField()
+    is_superuser = serializers.SerializerMethodField()
+
+    def get_is_superuser(self, obj):
+        return obj.is_superuser
+
+    def get_roles(self, obj):
+        roles = [r.role.name for r in obj.user_roles.all()]
+        return roles
+
 
     def get_has_password(self, obj):
         return obj.stored_password != CoreConfig.locked_user_password_hash
@@ -31,7 +41,8 @@ class InteractiveUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = InteractiveUser
         fields = ('id', 'language', 'last_name',
-                  'other_names', 'health_facility_id', 'rights', 'has_password')
+                  'other_names', 'health_facility_id', 'rights',
+                  'has_password', 'roles', 'is_superuser')
 
 
 class TechnicalUserSerializer(CachedModelSerializer):
