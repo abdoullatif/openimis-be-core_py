@@ -141,6 +141,14 @@ class InteractiveUserGQLType(DjangoObjectType):
         else:
             return None
 
+    def resolve_usermunicipality_set(self, info, **kwargs):
+        if not info.context.user.is_authenticated:
+            raise PermissionDenied(_("unauthorized"))
+        if self.usermunicipality_set:
+            return self.usermunicipality_set.filter(*filter_validity())
+        else:
+            return None
+
     @classmethod
     def get_queryset(cls, queryset, info):
         return InteractiveUser.get_queryset(queryset, info)

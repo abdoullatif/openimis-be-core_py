@@ -27,6 +27,7 @@ def create_or_update_interactive_user(user_id, data, audit_user_id, connected):
         "last_name": "last_name",
         "phone": "phone",
         "email": "email",
+        "code": "code",
         "language": "language_id",
         "health_facility_id": "health_facility_id",
     }
@@ -64,6 +65,10 @@ def create_or_update_interactive_user(user_id, data, audit_user_id, connected):
         create_or_update_user_districts(
             i_user, data["districts"], data_subset["audit_user_id"]
         )
+    if "municipalities" in data:
+        create_or_update_user_municipalities(
+            i_user, data["municipalities"], data_subset["audit_user_id"]
+        )
     cache.delete('cs_InteractiveUserSerializer_' + str(i_user.id))
     return i_user, created
 
@@ -97,6 +102,22 @@ def create_or_update_user_districts(i_user, district_ids, audit_user_id):
         user_district_class.objects.update_or_create(
             user=i_user,
             location_id=district_id,
+            defaults={"validity_to": None, "audit_user_id": audit_user_id},
+        )
+    cache.delete('q_allowed_locations_' + str(i_user.id))
+
+def create_or_update_user_municipalities(i_user, municipality_ids, audit_user_id):
+    user_municipality_class = apps.get_model("location", "UserMunicipality")
+    import datetime
+
+    now = datetime.datetime.now()
+    user_municipality_class.objects.filter(user=i_user, validity_to__isnull=True).update(
+        validity_to=now
+    )
+    for municipality_id in municipality_ids:
+        user_municipality_class.objects.update_or_create(
+            user=i_user,
+            location_id=municipality_id,
             defaults={"validity_to": None, "audit_user_id": audit_user_id},
         )
     cache.delete('q_allowed_locations_' + str(i_user.id))

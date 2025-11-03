@@ -2994,6 +2994,7 @@ ENTITY_RELATIVE_DISTRIBUTION = "RelativeDistribution"
 ENTITY_SERVICE = "Service"
 ENTITY_USER = "InteractiveUser"
 ENTITY_USER_DISTRICT = "UserDistrict"
+ENTITY_USER_MUNICIPALITY = "UserMunicipality"
 ENTITY_LOGINS = "ENTITY_LOGINS"  # Information no longer saved
 ENTITY_ICD = "ENTITY_ICD"  # Information no longer saved - no user interaction with ICDs
 ENTITY_ALL = "ENTITY_ALL"
@@ -3002,7 +3003,7 @@ AVAILABLE_ENTITIES = [ENTITY_CLAIM, ENTITY_BATCH_RUN, ENTITY_CLAIM_ADMIN, ENTITY
                       ENTITY_PAYER, ENTITY_PHOTO, ENTITY_PL_ITEM, ENTITY_PL_SERVICE, ENTITY_PL_ITEM_DETAILS,
                       ENTITY_PL_SERVICE_DETAILS, ENTITY_POLICY, ENTITY_PREMIUM, ENTITY_PRODUCT, ENTITY_PRODUCT_ITEM,
                       ENTITY_PRODUCT_SERVICE, ENTITY_RELATIVE_DISTRIBUTION, ENTITY_SERVICE, ENTITY_USER,
-                      ENTITY_USER_DISTRICT]
+                      ENTITY_USER_DISTRICT, ENTITY_USER_MUNICIPALITY]
 
 # Maps an entity to its module name
 MODULE_MAPPING = {
@@ -3032,6 +3033,7 @@ MODULE_MAPPING = {
     ENTITY_SERVICE: "medical",
     ENTITY_USER: "core",
     ENTITY_USER_DISTRICT: "location",
+    ENTITY_USER_MUNICIPALITY: "location",
 }
 
 # Used for the description
@@ -3142,6 +3144,8 @@ def determine_description(entity, element):
         return f"User {element.other_names} {element.last_name} - login {element.login_name}"
     if entity == ENTITY_USER_DISTRICT:
         return f"User {element.user.login_name} assigned to District {element.location.code} {element.location.name}"
+    if entity == ENTITY_USER_MUNICIPALITY:
+        return f"User {element.user.login_name} assigned to Municipality {element.location.code} {element.location.name}"
     if entity == ENTITY_LOCATION:
         return f"{LOCATION_TYPES[element.type]} {element.code} - {element.name} "
     else:

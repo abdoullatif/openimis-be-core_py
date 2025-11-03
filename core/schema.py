@@ -83,8 +83,6 @@ core = sys.modules["core"]
 logger = logging.getLogger(__name__)
 
 
-from core.user_import_service import UserImportService
-
 class SmallInt(graphene.Int):
     """
     This represents a small Integer, with values ranging from -32768 to +32767
@@ -1466,11 +1464,13 @@ class UserBase:
     other_names = graphene.String(required=True, max_length=50)
     last_name = graphene.String(required=True, max_length=50)
     username = graphene.String(required=True, max_length=8)
+    code = graphene.String(required=False)
     phone = graphene.String(required=False)
     email = graphene.String(required=False)
     password = graphene.String(required=False)
     health_facility_id = graphene.Int(required=False)
     districts = graphene.List(graphene.Int, required=False)
+    municipalities = graphene.List(graphene.Int, required=False)
     language = graphene.String(required=True, description="Language code for the user")
     # Interactive User only
     roles = graphene.List(
@@ -1874,39 +1874,6 @@ class GetCsrfTokenMutation(graphene.Mutation):
 
         return GetCsrfTokenMutation(csrf_token=csrf_token)
 
-class ImportUsers(OpenIMISMutation):
-    """
-    Mutation GraphQL permettant d'importer un fichier CSV d'utilisateurs.
-    """
-
-    class Input:
-        file_content = graphene.String(required=True)
-        delimiter = graphene.String(required=False, default_value=",")
-        dry_run = graphene.Boolean(required=False, default_value=False)
-
-    created = graphene.Int()
-    updated = graphene.Int()
-    errors = graphene.List(graphene.String)
-
-    @classmethod
-    def mutate(cls, root, info, **input):
-        try:
-            file_content = input.get("file_content")
-            delimiter = input.get("delimiter", ",")
-            dry_run = input.get("dry_run", False)
-
-            file_bytes = io.BytesIO(base64.b64decode(file_content))
-            report = UserImportService.import_users(file=file_bytes, delimiter=delimiter, dry_run=dry_run)
-
-            return ImportUsers(
-                created=report["created"],
-                updated=report["updated"],
-                errors=report["errors"],
-            )
-        except Exception as e:
-            return ImportUsers(created=0, updated=0, errors=[str(e)])
-
-
 class Mutation(graphene.ObjectType):
     create_role = CreateRoleMutation.Field()
     update_role = UpdateRoleMutation.Field()
@@ -1930,7 +1897,6 @@ class Mutation(graphene.ObjectType):
     delete_token_cookie = graphql_jwt.DeleteJSONWebTokenCookie.Field()
     delete_refresh_token_cookie = graphql_jwt.DeleteRefreshTokenCookie.Field()
     get_csrf_token = GetCsrfTokenMutation.Field()
-    import_users = ImportUsers.Field()
 
 
 def on_role_mutation(sender, **kwargs):
