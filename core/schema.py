@@ -65,7 +65,7 @@ from core.apps import CoreConfig
 from core.custom_filters import CustomFilterWizardStorage
 from core.gql_queries import RoleGQLType, RoleRightGQLType, UserGQLType, InteractiveUserGQLType, LanguageGQLType, \
     CustomFilterGQLType, ModulePermissionsListGQLType, OfficerGQLType, PermissionOpenImisGQLType, \
-    ModulePermissionGQLType, CustomFilterOptionGQLType
+    ModulePermissionGQLType, CustomFilterOptionGQLType, CustomFilterValueSuggestionGQLType
 from core.utils import flatten_dict, ExtendedConnection
 from core.models import ModuleConfiguration, FieldControl, MutationLog, Language, RoleMutation, UserMutation, User, \
     InteractiveUser, Role, RoleRight, ClaimAdmin
@@ -549,7 +549,7 @@ class OrderedDjangoFilterConnectionField(DjangoFilterConnectionField):
         else:
             qs = filter.qs
 
-        return OrderedDjangoFilterConnectionField.orderBy(qs, args)
+        return cls.orderBy(qs, args)
 
 
 class MutationLogGQLType(DjangoObjectType):
@@ -727,6 +727,17 @@ class Query(graphene.ObjectType):
         object_type_name=graphene.Argument(graphene.String, required=True),
         uuid_of_object=graphene.Argument(graphene.String, required=False),
         additional_params=graphene.Argument(graphene.JSONString, required=False),
+    )
+
+    custom_filter_value_suggestions = graphene.List(
+        CustomFilterValueSuggestionGQLType,
+        module_name=graphene.Argument(graphene.String, required=True),
+        object_type_name=graphene.Argument(graphene.String, required=True),
+        field=graphene.Argument(graphene.String, required=True),
+        search=graphene.Argument(graphene.String, required=True),
+        uuid_of_object=graphene.Argument(graphene.String, required=False),
+        additional_params=graphene.Argument(graphene.JSONString, required=False),
+        limit=graphene.Argument(graphene.Int, required=False),
     )
 
     languages = graphene.List(LanguageGQLType)
@@ -1119,6 +1130,40 @@ class Query(graphene.ObjectType):
             object_class_name=object_type_name,
             possible_filters=possible_filters
         )
+
+    def resolve_custom_filter_value_suggestions(self, info, **kwargs):
+        user = info.context.user
+        if type(user) is AnonymousUser or not user.id:
+            raise PermissionError("Unauthorized")
+
+        module_name, object_type_name, uuid_of_object, additional_params = (
+            Query._obtain_params_from_custom_filter_graphql_query(**kwargs)
+        )
+        field = kwargs.get("field")
+        search = kwargs.get("search")
+        limit = kwargs.get("limit", 20)
+
+        suggestion_kwargs = {}
+        if uuid_of_object is not None:
+            suggestion_kwargs["uuid"] = uuid_of_object
+        if additional_params is not None:
+            suggestion_kwargs["additional_params"] = additional_params
+
+        raw_suggestions = CustomFilterWizardStorage.get_value_suggestions(
+            module_name=module_name,
+            object_type=object_type_name,
+            field=field,
+            search=search,
+            limit=limit,
+            **suggestion_kwargs,
+        )
+        return [
+            CustomFilterValueSuggestionGQLType(
+                value=item.get("value", ""),
+                label=item.get("label", item.get("value", "")),
+            )
+            for item in raw_suggestions
+        ]
 
     @staticmethod
     def _obtain_params_from_custom_filter_graphql_query(**kwargs):

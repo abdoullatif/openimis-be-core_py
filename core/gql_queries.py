@@ -219,6 +219,11 @@ class CustomFilterGQLType(graphene.ObjectType):
     possible_filters = graphene.List(CustomFilterOptionGQLType)
 
 
+class CustomFilterValueSuggestionGQLType(graphene.ObjectType):
+    value = graphene.String()
+    label = graphene.String()
+
+
 class UserMutationGQLType(DjangoObjectType):
     """
     This intermediate object links Mutations to Users. Beware of the confusion between the user performing the mutation

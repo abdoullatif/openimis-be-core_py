@@ -65,3 +65,11 @@ class CustomFilterWizardInterface:
         :rtype: django.db.models.query.QuerySet
         """
         pass
+
+    def suggest_filter_values(self, field: str, search: str, limit: int = 20, **kwargs) -> List[dict]:
+        """
+        Return autocomplete suggestions for a filter field value.
+
+        Each item is a dict with keys ``value`` and ``label`` (both strings).
+        """
+        return []

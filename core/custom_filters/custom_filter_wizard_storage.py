@@ -107,6 +107,39 @@ class CustomFilterWizardStorage:
         return query
 
     @classmethod
+    def get_value_suggestions(
+        cls,
+        module_name: str,
+        object_type: str,
+        field: str,
+        search: str,
+        limit: int = 20,
+        **kwargs,
+    ) -> List[dict]:
+        registered_filter_wizards = CustomFilterRegistryPoint.REGISTERED_CUSTOM_FILTER_WIZARDS
+        if module_name not in registered_filter_wizards:
+            return []
+        search = (search or "").strip()
+        if not field or not search:
+            return []
+        limit = max(1, min(int(limit or 20), 50))
+        for registered_filter_wizard in registered_filter_wizards[module_name]:
+            if cls.__KEY_FOR_OBTAINING_CLASS not in registered_filter_wizard:
+                continue
+            wizard_filter_class = cls.__create_instance_of_wizard_class(registered_filter_wizard)
+            if not cls.__check_object_type(wizard_filter_class, object_type):
+                continue
+            suggestions = wizard_filter_class.suggest_filter_values(
+                field=field,
+                search=search,
+                limit=limit,
+                **kwargs,
+            )
+            if suggestions:
+                return suggestions[:limit]
+        return []
+
+    @classmethod
     def __run_load_definition_object_in_wizard(
         cls,
         wizard_filter_class: CustomFilterWizardInterface,
