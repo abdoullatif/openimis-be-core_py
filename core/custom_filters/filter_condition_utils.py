@@ -26,12 +26,11 @@ def extract_custom_filters_from_json_ext(json_ext: Any) -> List[Union[str, dict]
         return []
     by_status = json_ext.get("advanced_criteria_by_status")
     if isinstance(by_status, dict):
-        filters = []
-        for status_filters in by_status.values():
-            if isinstance(status_filters, list):
-                filters.extend(_extract_from_criteria_list(status_filters))
-        if filters:
-            return filters
+        from_status = by_status.get("ACTIVE") or by_status.get("active")
+        if isinstance(from_status, list):
+            filters = _extract_from_criteria_list(from_status)
+            if filters:
+                return filters
 
     advanced = json_ext.get("advanced_criteria")
     if not advanced:
@@ -52,10 +51,11 @@ def _extract_from_criteria_list(criteria_list: list) -> List[Union[str, dict]]:
     for item in criteria_list:
         if not isinstance(item, dict):
             continue
-        if item.get("custom_filter_condition"):
-            filters.append(item["custom_filter_condition"])
-        elif item.get("field") and item.get("filter"):
+        # Prefer structured field/filter/value so location objects keep their name.
+        if item.get("field") and item.get("filter") and item.get("value") not in (None, ""):
             filters.append(item)
+        elif item.get("custom_filter_condition"):
+            filters.append(item["custom_filter_condition"])
     return filters
 
 
